@@ -1,0 +1,8 @@
+streamlit
+pandas
+requests
+python-dotenv
+openpyxl
+python-dateutil
+urllib3
+
