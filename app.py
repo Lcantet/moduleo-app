@@ -45,7 +45,9 @@ if not st.session_state.authenticated:
 st.sidebar.write(f"Bienvenue, **{st.session_state.name}** ! 🎉")
 if st.sidebar.button("Se déconnecter"):
     st.session_state.authenticated = False
-    st.experimental_rerun()
+    # Pas de st.experimental_rerun pour compatibilité
+    st.sidebar.success("Déconnecté")
+    st.stop()
 
 # --- 5. Configuration de la page ---
 st.set_page_config(page_title="Moduleo Report - Pipeline Complet", layout="wide")
@@ -61,7 +63,7 @@ st.sidebar.header("Paramètres de la période")
 start_dt = st.sidebar.date_input("Date de début", value=first_prev)
 end_dt = st.sidebar.date_input("Date de fin", value=last_prev)
 
-# Format JJ/MM/AAAA pour affichage et fonctions métier
+# Format JJ/MM/AAAA
 date_start = start_dt.strftime("%d/%m/%Y")
 date_end = end_dt.strftime("%d/%m/%Y")
 st.sidebar.write(f"Période : **{date_start}** → **{date_end}**")
@@ -141,3 +143,13 @@ if st.sidebar.button("🚀 Exécuter tout"):
     except Exception as e:
         st.error(f"Erreur intégration factures : {e}")
         st.stop()
+
+    # --- 10. Téléchargement du fichier combiné ---
+    if combined_csv:
+        st.sidebar.header("Téléchargement")
+        with open(combined_csv, "rb") as f:
+            st.sidebar.download_button(
+                label="Télécharger CSV affaires combinées",
+                data=f,
+                file_name=os.path.basename(combined_csv)
+            )
