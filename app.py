@@ -1,4 +1,8 @@
+import os
+import json
+from dotenv import load_dotenv
 import streamlit as st
+import bcrypt
 from datetime import date, timedelta
 
 # Import des modules métier
@@ -8,25 +12,62 @@ from fetch_affaire_details import fetch_and_save_details, fetch_and_merge_detail
 from fetch_affaire_devis import fetch_and_update_devis
 from fetch_affaire_factures import fetch_and_update_factures
 
-# --- Configuration de la page ---
+# --- 1. Chargement des variables d'environnement ---
+load_dotenv()
+auth_json = os.getenv("USERS_HASH")
+if not auth_json:
+    st.error("🔴 La variable d'environnement USERS_HASH n'est pas définie.")
+    st.stop()
+users = json.loads(auth_json)
+
+# --- 2. Initialisation de l'état d'authentification ---
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.name = None
+
+# --- 3. Authentification ---
+if not st.session_state.authenticated:
+    st.sidebar.title("🔒 Connexion")
+    with st.sidebar.form(key='login_form'):
+        username_input = st.text_input("Nom d'utilisateur")
+        password_input = st.text_input("Mot de passe", type="password")
+        submitted = st.form_submit_button("Se connecter")
+        if submitted:
+            user = users.get(username_input)
+            if user and bcrypt.checkpw(password_input.encode(), user['password'].encode()):
+                st.session_state.authenticated = True
+                st.session_state.name = user.get('name')
+            else:
+                st.error("❌ Nom d'utilisateur ou mot de passe incorrect")
+    st.stop()
+
+# --- 4. Utilisateur authentifié et déconnexion ---
+st.sidebar.write(f"Bienvenue, **{st.session_state.name}** ! 🎉")
+if st.sidebar.button("Se déconnecter"):
+    st.session_state.authenticated = False
+    st.experimental_rerun()
+
+# --- 5. Configuration de la page ---
 st.set_page_config(page_title="Moduleo Report - Pipeline Complet", layout="wide")
 st.title("Moduleo Report - Exécution Automatique du Pipeline")
 
-# --- Dates par défaut (mois précédent) ---
+# --- 6. Sélection de la période (mois précédent par défaut) ---
 today = date.today()
 first_current = today.replace(day=1)
 last_prev = first_current - timedelta(days=1)
 first_prev = last_prev.replace(day=1)
 
-# --- Sidebar de paramètres ---
 st.sidebar.header("Paramètres de la période")
 start_dt = st.sidebar.date_input("Date de début", value=first_prev)
 end_dt = st.sidebar.date_input("Date de fin", value=last_prev)
 
-if st.sidebar.button("Exécuter tout"):
-    date_start = start_dt.strftime("%d/%m/%Y")
-    date_end = end_dt.strftime("%d/%m/%Y")
+# Format JJ/MM/AAAA pour affichage et fonctions métier
+date_start = start_dt.strftime("%d/%m/%Y")
+date_end = end_dt.strftime("%d/%m/%Y")
+st.sidebar.write(f"Période : **{date_start}** → **{date_end}**")
 
+# --- 7. Exécution du pipeline ---
+if st.sidebar.button("🚀 Exécuter tout"):
     st.markdown(f"### Résultats pour la période du **{date_start}** au **{date_end}**")
 
     # 1. Import des temps passés
