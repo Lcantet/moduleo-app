@@ -379,10 +379,22 @@
       tbody.innerHTML = '';
       
       data.forEach(d => {
-        const montantDevis = parseNumber(d.MontantTotalHT || d.MontantDevis);
+        // Exclure dossiers clôturés ou terminés - CORRIGER : utiliser d.Etat
+        const rawState = d.Etat || d.Statut || '';
+        const state = rawState
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .trim()
+          .toLowerCase();
         
-        // Debug pour vérifier
-        console.log(`Dossier ${d.Numero}: MontantTotalHT="${d.MontantTotalHT}", parsed=${montantDevis}`);
+        console.log(`Dossier ${d.Numero}: Etat="${d.Etat}", normalized="${state}"`);
+        
+        if (state === 'cloturee' || state === 'terminee') {
+          console.log(`Dossier ${d.Numero} exclu car état: ${state}`);
+          return;
+        }
+        
+        const montantDevis = parseNumber(d.MontantTotalHT || d.MontantDevis);
         
         // Dossiers sans devis (montant = 0)
         if (montantDevis === 0) {
