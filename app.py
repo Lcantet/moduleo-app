@@ -102,11 +102,18 @@ def inject_dashboard_data(html_content: str, csv_path: str) -> str:
             with open(temps_passes_csv, "r", encoding="utf-8") as f:
                 temps_passes_data = f.read()
         
-        # Injection des deux CSV
+        # Lire le CSV services pour correspondance IdService -> Nom
+        services_data = ""
+        if os.path.exists("services.csv"):
+            with open("services.csv", "r", encoding="utf-8") as f:
+                services_data = f.read()
+        
+        # Injection des trois CSV
         csv_injection = f"""
         <script>
         window.csvData = `{csv_data}`;
         window.tempsPassesData = `{temps_passes_data}`;
+        window.servicesData = `{services_data}`;
         </script>
         """
         

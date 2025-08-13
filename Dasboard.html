@@ -106,7 +106,37 @@
       return parseFloat(cleaned) || 0;
     }
 
+    function loadServices() {
+      // Charger la correspondance des services
+      if (window.servicesData) {
+        Papa.parse(window.servicesData, {
+          header: true,
+          delimiter: ',',
+          skipEmptyLines: true,
+          complete: results => {
+            servicesMap = {};
+            results.data.forEach(row => {
+              const id = parseInt(row.IdService);
+              const nom = row.Nom;
+              if (id && nom) {
+                servicesMap[id] = nom;
+              }
+            });
+            console.log('Services chargés:', servicesMap);
+          }
+        });
+      }
+    }
+
     function buildFilters(data) {
+      // Enrichir les données avec les noms des services
+      data.forEach(d => {
+        if (d.IdService && !d.Service) {
+          const idService = parseInt(d.IdService);
+          d.Service = servicesMap[idService] || `Service ${idService}`;
+        }
+      });
+      
       const services = [...new Set(data.map(d => d.Service))].filter(Boolean);
       const collabs = [...new Set(data.map(d => d.Collaborateur))].filter(Boolean);
       document.getElementById('service-filter').innerHTML = '<option>Tous</option>' + services.map(s => `<option>${s}</option>`).join('');
@@ -164,8 +194,9 @@
 
     // Les événements de drag & drop sont supprimés car on charge automatiquement
 
-    // Variable globale pour stocker les temps passés du mois
+    // Variables globales
     let tempsPassesMois = {};
+    let servicesMap = {};
 
     // Fonction pour charger les temps passés du mois
     function loadTempsPassesMois() {
@@ -196,7 +227,8 @@
 
     function updateDashboard() {
       if (!rawData.length) return;
-      loadTempsPassesMois(); // ← Ajouter cette ligne
+      loadServices(); // ← Charger les services en premier
+      loadTempsPassesMois();
       const svc = document.getElementById('service-filter').value;
       const col = document.getElementById('collaborateur-filter').value;
       const filtered = rawData.filter(d => (svc === 'Tous' || d.Service === svc) && (col === 'Tous' || d.Collaborateur === col));

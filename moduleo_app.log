@@ -1,0 +1,22 @@
+2025-08-13 17:21:49,770 - utils - INFO - Démarrage pipeline par louis
+2025-08-13 17:21:49,772 - utils - INFO - Démarrage pipeline pour période: 29/07/2025 -> 31/07/2025
+2025-08-13 17:21:49,772 - utils - INFO - Démarrage étape: Import des temps passés
+2025-08-13 17:21:50,053 - utils - INFO - Étape terminée avec succès: Import des temps passés -> tempspasses_202507_raw.csv
+2025-08-13 17:21:50,053 - utils - INFO - Démarrage étape: Enrichissement avec affaires
+2025-08-13 17:21:52,174 - utils - INFO - Étape terminée avec succès: Enrichissement avec affaires -> tempspasses_202507_affaires.csv
+2025-08-13 17:21:52,174 - utils - INFO - Démarrage étape: Export des affaires uniques
+2025-08-13 17:21:52,182 - utils - INFO - Étape terminée avec succès: Export des affaires uniques -> unique_affaires_202507.csv
+2025-08-13 17:21:52,182 - utils - INFO - Démarrage étape: Temps passés par affaire
+2025-08-13 17:21:56,483 - utils - INFO - Étape terminée avec succès: Temps passés par affaire -> tempspasses_affaires_202507.csv
+2025-08-13 17:21:56,483 - utils - INFO - Démarrage étape: Calcul PrixVenteCollaborateur
+2025-08-13 17:22:01,930 - utils - INFO - Étape terminée avec succès: Calcul PrixVenteCollaborateur -> prixventecollab_affaires_202507.csv
+2025-08-13 17:22:01,930 - utils - INFO - Démarrage étape: Sauvegarde détails affaires
+2025-08-13 17:22:09,657 - utils - INFO - Étape terminée avec succès: Sauvegarde détails affaires -> affaires_acteur_service_202507.csv
+2025-08-13 17:22:09,658 - utils - INFO - Démarrage étape: Fusion détails & prix
+2025-08-13 17:22:17,503 - utils - INFO - Étape terminée avec succès: Fusion détails & prix -> affaires_combinees_202507.csv
+2025-08-13 17:22:17,503 - utils - INFO - Démarrage étape: Intégration des devis
+2025-08-13 17:22:25,709 - utils - INFO - Étape terminée avec succès: Intégration des devis -> affaires_combinees_202507.csv
+2025-08-13 17:22:25,709 - utils - INFO - Démarrage étape: Intégration des factures
+2025-08-13 17:22:32,378 - utils - INFO - Étape terminée avec succès: Intégration des factures -> affaires_combinees_202507.csv
+2025-08-13 17:22:32,379 - utils - INFO - Pipeline terminé avec succès
+2025-08-13 17:22:32,381 - utils - INFO - Données dashboard préparées: dashboard_data.csv
