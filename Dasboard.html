@@ -98,8 +98,12 @@
     let rawData = [];
     const messageEl = document.getElementById('message');
 
+    // Fonction parseNumber corrigée pour gérer les virgules françaises
     function parseNumber(str) {
-      return parseFloat(str?.toString().replace(/\s/g, '').replace(',', '.')) || 0;
+      if (!str || str === '') return 0;
+      // Remplacer les virgules par des points pour le parsing
+      const cleaned = str.toString().replace(/,/g, '.').replace(/[^\d.-]/g, '');
+      return parseFloat(cleaned) || 0;
     }
 
     function buildFilters(data) {
@@ -365,6 +369,31 @@
               tbody.appendChild(tr);
             }
           }
+        }
+      });
+    }
+
+    function renderZeroList(data) {
+      data.sort((a, b) => (parseInt(a.Dossier || a.Numero, 10) || 0) - (parseInt(b.Dossier || b.Numero, 10) || 0));
+      const tbody = document.querySelector('#zero-list tbody');
+      tbody.innerHTML = '';
+      
+      data.forEach(d => {
+        const montantDevis = parseNumber(d.MontantTotalHT || d.MontantDevis);
+        
+        // Debug pour vérifier
+        console.log(`Dossier ${d.Numero}: MontantTotalHT="${d.MontantTotalHT}", parsed=${montantDevis}`);
+        
+        // Dossiers sans devis (montant = 0)
+        if (montantDevis === 0) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${d.Dossier || d.Numero}</td>
+            <td>${d.Objet || ''}</td>
+            <td>${d.Collaborateur || ''}</td>
+            <td>${d.Service || ''}</td>
+          `;
+          tbody.appendChild(tr);
         }
       });
     }
