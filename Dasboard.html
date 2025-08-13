@@ -319,7 +319,6 @@
     }
 
     function renderFacturesAnciennes(data) {
-      // Tri ascendant par numéro
       data.sort((a, b) => (parseInt(a.Dossier || a.Numero, 10) || 0) - (parseInt(b.Dossier || b.Numero, 10) || 0));
       const tbody = document.querySelector('#dossier-factures-anciennes tbody');
       tbody.innerHTML = '';
@@ -327,10 +326,7 @@
       const deuxMoisEnJours = 60;
       
       data.forEach(d => {
-        // *** SUPPRESSION DU FILTRE D'ÉTAT pour ce tableau ***
-        // const rawState = d.Statut || d.Etat || '';
-        // const state = rawState.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
-        // if (state === 'cloturee' || state === 'terminee') return;
+        // PAS DE FILTRE D'ÉTAT pour ce tableau
         
         const idAffaire = parseFloat(d.idAffaire);
         const montantFacture = parseNumber(d.MontantFacturesHT || d.MontantFacture);
@@ -339,8 +335,8 @@
         // Récupérer les heures du mois pour cette affaire
         const heuresMois = tempsPassesMois[idAffaire] || 0;
         
-        // Vérifier qu'il y a du temps passé CE MOIS et une facture
-        if (heuresMois > 0 && montantFacture > 0 && dateEmissionFacture) {
+        // Condition : facture > 0 ET heures passées CE MOIS > 0
+        if (montantFacture > 0 && heuresMois > 0 && dateEmissionFacture) {
           // Parser la date ISO format
           let dateFacture = null;
           if (dateEmissionFacture.includes('T')) {
