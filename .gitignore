@@ -1,5 +1,7 @@
 .env
 nohup.out
-.env
 .venv/
-nohup.out
+
+# Fichiers CSV générés (sauf services.csv)
+*.csv
+!services.csv

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Financier</title>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f6fa; }
+    header { margin-bottom: 20px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+    .filters label, .filters input { flex: 1 1 auto; }
+    .kpis { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
+    .kpi { background: #fff; padding: 20px; border-radius: 8px; flex: 1 1 250px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .charts { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 40px; }
+    .charts canvas { flex: 1 1 300px; max-height: 300px; }
+    section { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    tr.orange { background-color: #FFDAB9; }
+    tr.red { background-color: #FFB3B3; color: #333; }
+    .dropzone { margin-top: 10px; padding: 20px; border: 2px dashed #888; border-radius: 8px; text-align: center; background: #fafafa; }
+    .dropzone.dragover { background: #e0f7fa; border-color: #00796b; }
+    #message { margin-top: 10px; color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Tableau de bord – Affaires combinées</h1>
+    <div class="filters">
+      <label>Service:
+        <select id="service-filter"><option>Tous</option></select>
+      </label>
+      <label>Collaborateur:
+        <select id="collaborateur-filter"><option>Tous</option></select>
+      </label>
+    </div>
+    <div id="message">Chargement des données...</div>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi"><h3>Backlog brut</h3><p id="backlog">0 €</p></div>
+    <div class="kpi"><h3>Point mort</h3><p id="point-mort">115 000 €</p></div>
+    <div class="kpi"><h3>Marge de sécurité</h3><p id="marge-securite">0 €</p></div>
+  </div>
+
+  <div class="charts">
+    <canvas id="pie-chart"></canvas>
+    <canvas id="bar-margin"></canvas>
+    <canvas id="bar-ca"></canvas>
+  </div>
+
+  <section id="statut-dossiers">
+    <h2>Dossiers avec factures (≥ 80 % du devis)</h2>
+    <table id="dossier-factures">
+      <thead>
+        <tr><th>Dossier</th><th>Objet</th><th>Montant Devis (€)</th><th>Prix Vente Collaborateur (€)</th><th>Montant Facturé (€)</th><th>Ratio (%)</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="statut-dossiers-sans-factures">
+    <h2>Dossiers sans factures (≥ 80 % du devis)</h2>
+    <table id="dossier-sans-factures">
+      <thead>
+        <tr><th>Dossier</th><th>Objet</th><th>Montant Devis (€)</th><th>Prix Vente Collaborateur (€)</th><th>Ratio (%)</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="dossiers-factures-anciennes">
+    <h2>Dossiers avec temps passé et factures > 2 mois</h2>
+    <table id="dossier-factures-anciennes">
+      <thead>
+        <tr><th>Dossier</th><th>Objet</th><th>Collaborateur</th><th>Temps Passé (h)</th><th>Date Dernière Facture</th><th>Montant Facturé (€)</th><th>Âge (jours)</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="dossiers-zero">
+    <h2>Dossiers sans devis (MontantTotalHT = 0)</h2>
+    <table id="zero-list">
+      <thead>
+        <tr><th>Dossier</th><th>Objet</th><th>Collaborateur</th><th>Service</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <script>
+    const POINT_MORT = 115000;
+    let rawData = [];
+    const messageEl = document.getElementById('message');
+
+    function parseNumber(str) {
+      return parseFloat(str?.toString().replace(/\s/g, '').replace(',', '.')) || 0;
+    }
+
+    function buildFilters(data) {
+      const services = [...new Set(data.map(d => d.Service))].filter(Boolean);
+      const collabs = [...new Set(data.map(d => d.Collaborateur))].filter(Boolean);
+      document.getElementById('service-filter').innerHTML = '<option>Tous</option>' + services.map(s => `<option>${s}</option>`).join('');
+      document.getElementById('collaborateur-filter').innerHTML = '<option>Tous</option>' + collabs.map(c => `<option>${c}</option>`).join('');
+      document.getElementById('service-filter').onchange = updateDashboard;
+      document.getElementById('collaborateur-filter').onchange = updateDashboard;
+    }
+
+    function loadCSV(file) {
+      messageEl.innerText = 'Fichier chargé : ' + (file.name || 'dashboard_data.csv');
+      Papa.parse(file, {
+        header: true,
+        delimiter: ';',
+        skipEmptyLines: true,
+        complete: results => {
+          rawData = results.data;
+          if (!rawData.length) { messageEl.innerText = 'Aucune donnée trouvée.'; return; }
+          messageEl.innerText = `Données chargées: ${rawData.length} lignes`;
+          buildFilters(rawData);
+          updateDashboard();
+        },
+        error: err => messageEl.innerText = 'Erreur de parsing : ' + err.message
+      });
+    }
+
+    function loadCSVFromURL(url) {
+      messageEl.innerText = 'Chargement des données...';
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+          }
+          return response.text();
+        })
+        .then(csvText => {
+          Papa.parse(csvText, {
+            header: true,
+            delimiter: ';',
+            skipEmptyLines: true,
+            complete: results => {
+              rawData = results.data;
+              if (!rawData.length) { messageEl.innerText = 'Aucune donnée trouvée.'; return; }
+              messageEl.innerText = `Données chargées: ${rawData.length} lignes`;
+              buildFilters(rawData);
+              updateDashboard();
+            },
+            error: err => messageEl.innerText = 'Erreur de parsing : ' + err.message
+          });
+        })
+        .catch(err => {
+          messageEl.innerText = 'Erreur de chargement : ' + err.message;
+          console.error('Erreur:', err);
+        });
+    }
+
+    // Les événements de drag & drop sont supprimés car on charge automatiquement
+
+    // Variable globale pour stocker les temps passés du mois
+    let tempsPassesMois = {};
+
+    // Fonction pour charger les temps passés du mois
+    function loadTempsPassesMois() {
+      // Simuler le chargement du CSV tempspasses (à adapter selon ton injection)
+      // Format attendu : chaque ligne = 1 heure, groupées par idAffaire
+      
+      // Pour l'instant, utiliser les données injectées
+      // Tu devras injecter aussi le CSV tempspasses dans ton app.py
+      if (window.tempsPassesData) {
+        Papa.parse(window.tempsPassesData, {
+          header: true,
+          delimiter: ',',
+          skipEmptyLines: true,
+          complete: results => {
+            // Compter les heures par idAffaire
+            tempsPassesMois = {};
+            results.data.forEach(row => {
+              const idAffaire = parseFloat(row.idAffaire);
+              if (idAffaire && !isNaN(idAffaire)) {
+                tempsPassesMois[idAffaire] = (tempsPassesMois[idAffaire] || 0) + 1;
+              }
+            });
+            console.log('Temps passés du mois chargés:', tempsPassesMois);
+          }
+        });
+      }
+    }
+
+    function updateDashboard() {
+      if (!rawData.length) return;
+      loadTempsPassesMois(); // ← Ajouter cette ligne
+      const svc = document.getElementById('service-filter').value;
+      const col = document.getElementById('collaborateur-filter').value;
+      const filtered = rawData.filter(d => (svc === 'Tous' || d.Service === svc) && (col === 'Tous' || d.Collaborateur === col));
+      calculateKPIs(filtered);
+      buildCharts(filtered);
+      renderDossierList(filtered);
+      renderFacturesAnciennes(filtered);
+      renderZeroList(filtered);
+    }
+
+    function calculateKPIs(data) {
+      const backlog = data.reduce((sum, d) => sum + parseNumber(d.CA_HT || d.MontantTotalHT), 0);
+      document.getElementById('backlog').innerText = backlog.toLocaleString() + ' €';
+      document.getElementById('marge-securite').innerText = (backlog - POINT_MORT).toLocaleString() + ' €';
+    }
+
+    let pieChart, barMargin, barCA;
+    function buildCharts(data) {
+      const etats = {}, margins = {}, caSrv = {};
+      const valid = data.filter(d => {
+        const state = d.Statut || d.Etat;
+        return state === 'Cloturee' || state === 'Terminee';
+      });
+      valid.forEach(d => {
+        const montantFacture = parseNumber(d.MontantFacturesHT);
+        const vente = parseNumber(d.PrixVenteCollaborateur || d.PrixVenteCollab);
+        const margeBrute = montantFacture - vente;
+        const state = d.Statut || d.Etat;
+        etats[state] = (etats[state] || 0) + montantFacture;
+        margins[d.Service] = (margins[d.Service] || 0) + margeBrute;
+        caSrv[d.Service] = (caSrv[d.Service] || 0) + montantFacture;
+      });
+      const pieCtx = document.getElementById('pie-chart').getContext('2d'); pieChart?.destroy();
+      pieChart = new Chart(pieCtx, { type: 'doughnut', data: { labels: Object.keys(etats), datasets: [{ data: Object.values(etats), backgroundColor: ['#87CEFA','#FFDAB9','#FFB3B3','#90EE90','#D3D3D3'] }] }, options: { plugins: { legend: { position: 'bottom' } } } });
+      const mCtx = document.getElementById('bar-margin').getContext('2d'); barMargin?.destroy();
+      barMargin = new Chart(mCtx, { type: 'bar', data: { labels: Object.keys(margins), datasets: [{ label: 'Marge brute (€)', data: Object.values(margins), backgroundColor: Object.values(margins).map(v => v >= 0 ? '#ADD8E6' : '#FFB3B3') }] }, options: { indexAxis: 'y', scales: { x: { ticks: { callback: v => v.toLocaleString() + ' €' } } } } });
+      const caCtx = document.getElementById('bar-ca').getContext('2d'); barCA?.destroy();
+      barCA = new Chart(caCtx, { type: 'bar', data: { labels: Object.keys(caSrv), datasets: [{ label: 'CA facturé (€)', data:	Object.values(caSrv), backgroundColor: '#87CEFA' }] }, options: { indexAxis: 'y', scales: { x: { ticks: { callback: v => v.toLocaleString() + ' €' } } } } });
+    }
+
+    // Normalized renderDossierList to filter accents and whitespace
+    function renderDossierList(data) {
+      renderDossierAvecFactures(data);
+      renderDossierSansFactures(data);
+    }
+
+    function renderDossierAvecFactures(data) {
+      // Tri ascendant par numéro
+      data.sort((a, b) => (parseInt(a.Dossier || a.Numero, 10) || 0) - (parseInt(b.Dossier || b.Numero, 10) || 0));
+      const tbody = document.querySelector('#dossier-factures tbody');
+      tbody.innerHTML = '';
+      data.forEach(d => {
+        // Exclure dossiers clôturés ou terminés
+        const rawState = d.Statut || d.Etat || '';
+        const state = rawState
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .trim()
+          .toLowerCase();
+        if (state === 'cloturee' || state === 'terminee') return;
+        
+        const devis = parseNumber(d.MontantTotalHT || d.MontantDevis);
+        const vente = parseNumber(d.PrixVenteCollaborateur || d.PrixVenteCollab);
+        const facture = parseNumber(d.MontantFacturesHT || d.MontantFacture);
+        
+        if (devis > 0 && facture > 0) { // Avec facture
+          const ratio = vente / devis;
+          if (ratio >= 0.8) {
+            const tr = document.createElement('tr');
+            tr.className = ratio > 1 ? 'red' : 'orange';
+            tr.innerHTML = `
+              <td>${d.Dossier || d.Numero}</td>
+              <td>${d.Objet || ''}</td>
+              <td>${devis.toLocaleString()}</td>
+              <td>${vente.toLocaleString()}</td>
+              <td>${facture.toLocaleString()}</td>
+              <td>${(ratio * 100).toFixed(1)} %</td>
+            `;
+            tbody.appendChild(tr);
+          }
+        }
+      });
+    }
+
+    function renderDossierSansFactures(data) {
+      // Tri ascendant par numéro
+      data.sort((a, b) => (parseInt(a.Dossier || a.Numero, 10) || 0) - (parseInt(b.Dossier || b.Numero, 10) || 0));
+      const tbody = document.querySelector('#dossier-sans-factures tbody');
+      tbody.innerHTML = '';
+      data.forEach(d => {
+        // Exclure dossiers clôturés ou terminés
+        const rawState = d.Statut || d.Etat || '';
+        const state = rawState
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .trim()
+          .toLowerCase();
+        if (state === 'cloturee' || state === 'terminee') return;
+        
+        const devis = parseNumber(d.MontantTotalHT || d.MontantDevis);
+        const vente = parseNumber(d.PrixVenteCollaborateur || d.PrixVenteCollab);
+        const facture = parseNumber(d.MontantFacturesHT || d.MontantFacture);
+        
+        if (devis > 0 && facture === 0) { // Sans facture
+          const ratio = vente / devis;
+          if (ratio >= 0.8) {
+            const tr = document.createElement('tr');
+            tr.className = ratio > 1 ? 'red' : 'orange';
+            tr.innerHTML = `
+              <td>${d.Dossier || d.Numero}</td>
+              <td>${d.Objet || ''}</td>
+              <td>${devis.toLocaleString()}</td>
+              <td>${vente.toLocaleString()}</td>
+              <td>${(ratio * 100).toFixed(1)} %</td>
+            `;
+            tbody.appendChild(tr);
+          }
+        }
+      });
+    }
+
+    function renderFacturesAnciennes(data) {
+      // Tri ascendant par numéro
+      data.sort((a, b) => (parseInt(a.Dossier || a.Numero, 10) || 0) - (parseInt(b.Dossier || b.Numero, 10) || 0));
+      const tbody = document.querySelector('#dossier-factures-anciennes tbody');
+      tbody.innerHTML = '';
+      const aujourdhui = new Date();
+      const deuxMoisEnJours = 60;
+      
+      data.forEach(d => {
+        // *** SUPPRESSION DU FILTRE D'ÉTAT pour ce tableau ***
+        // const rawState = d.Statut || d.Etat || '';
+        // const state = rawState.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+        // if (state === 'cloturee' || state === 'terminee') return;
+        
+        const idAffaire = parseFloat(d.idAffaire);
+        const montantFacture = parseNumber(d.MontantFacturesHT || d.MontantFacture);
+        const dateEmissionFacture = d.DateEmission_Facture || d.DateFacture || '';
+        
+        // Récupérer les heures du mois pour cette affaire
+        const heuresMois = tempsPassesMois[idAffaire] || 0;
+        
+        // Vérifier qu'il y a du temps passé CE MOIS et une facture
+        if (heuresMois > 0 && montantFacture > 0 && dateEmissionFacture) {
+          // Parser la date ISO format
+          let dateFacture = null;
+          if (dateEmissionFacture.includes('T')) {
+            dateFacture = new Date(dateEmissionFacture.split('T')[0]);
+          } else if (dateEmissionFacture.includes('-') && dateEmissionFacture.length >= 10) {
+            dateFacture = new Date(dateEmissionFacture.substring(0, 10));
+          }
+          
+          if (dateFacture && !isNaN(dateFacture)) {
+            const diffTime = aujourdhui - dateFacture;
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            // Si la facture a plus de 2 mois (60 jours)
+            if (diffDays > deuxMoisEnJours) {
+              const tr = document.createElement('tr');
+              tr.className = diffDays > 90 ? 'red' : 'orange';
+              tr.innerHTML = `
+                <td>${d.Dossier || d.Numero}</td>
+                <td>${d.Objet || ''}</td>
+                <td>${d.Collaborateur || ''}</td>
+                <td>${heuresMois.toFixed(1)}</td>
+                <td>${dateEmissionFacture.split('T')[0]}</td>
+                <td>${montantFacture.toLocaleString()}</td>
+                <td>${diffDays}</td>
+              `;
+              tbody.appendChild(tr);
+            }
+          }
+        }
+      });
+    }
+
+    window.addEventListener('load', () => {
+      loadCSVFromURL('http://localhost:8001/dashboard_data.csv');
+    });
+  </script>
+</body>
+</html>
