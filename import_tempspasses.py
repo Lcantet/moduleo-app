@@ -51,6 +51,10 @@ def _fetch_tempspasses(
     params: Dict[str, Any] = {"dateMin": date_min, "dateMax": date_max, "nbMaxResultat": 10000}
     if id_affaire is not None:
         params["idAffaire"] = id_affaire
+
+    # Ajouter idsUtilisateurs vide si requis par l'API
+    params["idsUtilisateurs"] = ""
+
     resp = SESSION.get(url, params=params, headers=HEADERS)
     resp.raise_for_status()
     return resp.json()
